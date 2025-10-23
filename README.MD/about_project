@@ -1,0 +1,35 @@
+# 🌐 Azure Fullstack Terraform Project  
+
+A robust and scalable infrastructure deployment on **Microsoft Azure** using **Terraform**.  
+This project follows *Infrastructure as Code (IaC)* best practices to deploy a **fullstack application** with separate **frontend** and **backend VMs**, designed for **security**, **modularity**, and **easy maintenance**.
+
+---
+
+## 📘 Project Overview  
+
+- 🧩 Developed modular Terraform code to provision Azure resources efficiently.  
+- 🔄 Segregated environments (**Dev & Prod**) to support smooth development lifecycle and risk reduction.  
+- 🛡️ Applied Azure best practices: subnet isolation, **Network Security Groups (NSGs)**, and static public IPs.  
+- ♻️ Created reusable modules for **Resource Groups**, **Virtual Networks**, **Subnets**, **NICs**, **NSGs**, and **VMs** to ensure scalability and maintainability.  
+
+---
+
+## ⚙️ Key Features  
+
+- **🧱 Modular Architecture:** Reusable Terraform modules for fast and consistent environment setup.  
+- **🔐 Environment Isolation:** Separate state management for Dev and Prod using **Azure Blob Storage backend**.  
+- **🌐 Secure Network Design:** Frontend and backend subnets with NSGs restricting SSH to backend and HTTP access open on frontend.  
+- **🤖 Automation Ready:** Clear workflow to initialize, plan, and apply Terraform for reliable deployments.  
+- **📡 Output Management:** Automatic retrieval of VM public IPs for easy SSH access and application deployment.  
+
+---
+
+## 🚀 Usage  
+
+1. ✏️ Customize variables in `terraform.tfvars`.  
+2. ⚙️ Run `terraform init`.  
+3. 🧩 Run `terraform plan`.  
+4. 🚀 Run `terraform apply`.  
+5. 🔍 Use the output IP addresses to SSH into the VMs and deploy your application.  
+
+--- 
