@@ -1,0 +1,162 @@
+parameters:
+- name: environments
+  displayName: Environment
+  type: string
+  default: dev
+  values:
+    - dev
+    - prod
+
+trigger: none
+
+name: VM-DEPLOYMENT-PIPELINE
+
+pool:
+  name: fullstack-agent
+
+stages:
+
+# ==========================
+# Stage 1: BUILD
+# ==========================
+- stage: BUILD
+  displayName: "Terraform Install, Init, Validate + Security Scans"
+  jobs:
+  - job: terraform_install_init_validate
+    displayName: "Terraform Init/Validate + Security Scan"
+    steps:
+      # Install latest Terraform
+      - task: TerraformInstaller@1
+        displayName: "Install Latest Terraform"
+        inputs:
+          terraformVersion: 'latest'
+
+      - script: terraform -version
+        displayName: "Check Terraform Version"
+
+      # Set environment variable
+      - powershell: |
+          $env:ENV_NAME = '${{ parameters.environments }}'
+          Write-Host "ENV_NAME = $env:ENV_NAME"
+        displayName: "Set Environment Variable"
+
+      # Install Security Tools (TFLint + TFSEC)
+      - powershell: |
+          Write-Host "Installing Security Tools..."
+          $toolsPath = "$(System.DefaultWorkingDirectory)\tools"
+          if (!(Test-Path $toolsPath)) { New-Item -ItemType Directory -Force -Path $toolsPath }
+
+          # --- TFLint ---
+          $tflintZip = "$toolsPath\tflint_windows_amd64.zip"
+          Invoke-WebRequest -Uri "https://github.com/terraform-linters/tflint/releases/download/v0.59.1/tflint_windows_amd64.zip" -OutFile $tflintZip
+          Expand-Archive -LiteralPath $tflintZip -DestinationPath $toolsPath -Force
+
+          # --- TFSec ---
+          $tfsecPath = "$toolsPath\tfsec.exe"
+          Invoke-WebRequest -Uri "https://github.com/aquasecurity/tfsec/releases/latest/download/tfsec-windows-amd64.exe" -OutFile $tfsecPath
+
+          # Run Security Scans
+          cd "$(System.DefaultWorkingDirectory)/environments/$env:ENV_NAME"
+
+          & "$toolsPath\tflint.exe" --init
+          & "$toolsPath\tflint.exe"
+
+          & "$tfsecPath" .
+        displayName: "Install Security Tools & Run Scans"
+
+# ==========================
+# Stage 2: PLAN
+# ==========================
+- stage: PLAN
+  displayName: "Terraform Plan"
+  dependsOn: BUILD
+  jobs:
+  - job: terraform_plan
+    displayName: "Terraform Plan"
+    steps:
+      - powershell: |
+          $env:ENV_NAME = '${{ parameters.environments }}'
+        displayName: "Set Environment Variable"
+
+      - ${{ if eq(parameters.environments, 'dev') }}:
+        - task: DownloadSecureFile@1
+          name: downloadTfVarsDev
+          inputs:
+            secureFile: 'terraform.tfvars'
+
+        - powershell: |
+            cd "$(System.DefaultWorkingDirectory)/environments/dev"
+
+            # Initialize backend
+            terraform init -reconfigure
+
+            # Run plan
+            terraform plan -var-file="$(downloadTfVarsDev.secureFilePath)"
+          displayName: "Terraform Init & Plan (DEV)"
+
+      - ${{ if eq(parameters.environments, 'prod') }}:
+        - task: DownloadSecureFile@1
+          name: downloadTfVarsProd
+          inputs:
+            secureFile: 'terraform-prod.tfvars'
+
+        - powershell: |
+            cd "$(System.DefaultWorkingDirectory)/environments/prod"
+
+            # Initialize backend
+            terraform init -reconfigure
+
+            # Run plan
+            terraform plan -var-file="$(downloadTfVarsProd.secureFilePath)"
+          displayName: "Terraform Init & Plan (PROD)"
+
+# ==========================
+# Stage 3: APPLY
+# ==========================
+- stage: APPLY
+  displayName: "Terraform Apply (Manual Approval)"
+  dependsOn: PLAN
+  condition: succeeded()
+  jobs:
+  - deployment: terraform_apply_deployment
+    displayName: "Terraform Apply"
+    environment: 'terraform-apply-approval'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+            - powershell: |
+                $env:ENV_NAME = '${{ parameters.environments }}'
+              displayName: "Set Environment Variable"
+
+            - ${{ if eq(parameters.environments, 'dev') }}:
+              - task: DownloadSecureFile@1
+                name: downloadTfVarsDev
+                inputs:
+                  secureFile: 'terraform.tfvars'
+
+              - powershell: |
+                  cd "$(System.DefaultWorkingDirectory)/environments/dev"
+
+                  # Initialize backend
+                  terraform init -reconfigure
+
+                  # Apply Terraform
+                  terraform apply -auto-approve -var-file="$(downloadTfVarsDev.secureFilePath)"
+                displayName: "Terraform Apply (DEV)"
+
+            - ${{ if eq(parameters.environments, 'prod') }}:
+              - task: DownloadSecureFile@1
+                name: downloadTfVarsProd
+                inputs:
+                  secureFile: 'terraform-prod.tfvars'
+
+              - powershell: |
+                  cd "$(System.DefaultWorkingDirectory)/environments/prod"
+
+                  # Initialize backend
+                  terraform init -reconfigure
+
+                  # Apply Terraform
+                  terraform apply -auto-approve -var-file="$(downloadTfVarsProd.secureFilePath)"
+                displayName: "Terraform Apply (PROD)"
