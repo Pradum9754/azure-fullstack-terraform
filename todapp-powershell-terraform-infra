@@ -1,1 +1,36 @@
+trigger:
+- feature/*
+- main
 
+pool:
+  name: todo-pool
+
+steps:
+- task: PowerShell@2
+  displayName: az login
+  inputs:
+    targetType: 'inline'
+    script: 'az login --service-principal --username ac5b6d74-cc29-4105-9342-879a25ceae37 --password (secret value) ***************************** --tenant 7f01c7ee-d50d-41bd-9da8-fa59a5d857b3'
+- task: PowerShell@2
+  displayName: terraform init + fmt +validate
+  inputs:
+    targetType: 'inline'
+    script: |
+      cd environments/dev
+      terraform init
+      terraform fmt
+      terraform validate
+- task: PowerShell@2
+  displayName: terraform plan
+  inputs:
+    targetType: 'inline'
+    script: |
+      cd environments/dev
+      terraform plan
+- task: PowerShell@2
+  displayName: terraform apply
+  inputs:
+    targetType: 'inline'
+    script: |
+      cd environments/dev
+      terraform apply -auto-approve
